@@ -1,0 +1,9 @@
+apiVersion: waoendpointproxy.bitmedia.co.jp/v1beta1
+kind: ClusterScore
+metadata:
+  labels:
+    app.kubernetes.io/name: wao-endpoint-proxy
+    app.kubernetes.io/managed-by: kustomize
+  name: clusterscore-sample
+spec:
+  # TODO(user): Add fields here
