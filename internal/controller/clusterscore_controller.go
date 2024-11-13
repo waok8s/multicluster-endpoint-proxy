@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	waoendpointproxyv1beta1 "github.com/waok8s/wao-endpoint-proxy/api/v1beta1"
+	multiclusterendpointproxyv1beta1 "github.com/waok8s/multicluster-endpoint-proxy/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -50,7 +50,7 @@ type ClusterScoreReconciler struct {
 	wao    *Wao
 }
 
-//#+kubebuilder:rbac:groups=waoendpointproxy.bitmedia.co.jp,resources=*,verbs=*
+//#+kubebuilder:rbac:groups=multicluster-endpoint-proxy.waok8s.github.io,resources=*,verbs=*
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -64,25 +64,30 @@ type ClusterScoreReconciler struct {
 func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	var cs waoendpointproxyv1beta1.ClusterScore
+	var cs multiclusterendpointproxyv1beta1.ClusterScore
 	if err := r.Get(ctx, req.NamespacedName, &cs); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var score int64
-	var region string
 	//lint:ignore S1002 set true in SetupWithManager
 	if cs.Spec.OwnCluster == true {
-		score = r.wao.ClusterScore(ctx, r.Client, 0, false)
+		score, items := r.wao.ClusterScore(ctx, r.Client, 0, false)
 		if score > 0 {
 			cs.Status.Score = score
+			cs.Status.Nodes = []multiclusterendpointproxyv1beta1.ClusterScoreNodeScore{}
+			for _, n := range items {
+				cs.Status.Nodes = append(cs.Status.Nodes, multiclusterendpointproxyv1beta1.ClusterScoreNodeScore{Name: n.Name, Score: n.Score})
+			}
 			if err := r.Status().Patch(ctx, &cs, client.Merge); err != nil {
 				return ctrl.Result{Requeue: false}, err
 			}
 		}
 	} else {
+		var score int64
+		var items []multiclusterendpointproxyv1beta1.ClusterScoreNodeScore
+		var region string
 		endpoint := cs.Spec.Endpoint
-		url := endpoint + "/apis/" + waoendpointproxyv1beta1.GroupVersion.Identifier() + "/namespaces/" + cs.ObjectMeta.Namespace + "/clusterscores"
+		url := endpoint + "/apis/" + multiclusterendpointproxyv1beta1.GroupVersion.Identifier() + "/namespaces/" + cs.ObjectMeta.Namespace + "/clusterscores"
 		scoreReq, _ := http.NewRequest("GET", url, nil)
 		scoreReq.SetBasicAuth(os.Getenv("BASIC_AUTH_USERNAME"), os.Getenv("BASIC_AUTH_PASSWORD"))
 		httpClient := new(http.Client)
@@ -96,18 +101,20 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{Requeue: false}, nil
 		}
 		respBody, _ := io.ReadAll(scoreResp.Body)
-		var clusterscores waoendpointproxyv1beta1.ClusterScoreList
+		var clusterscores multiclusterendpointproxyv1beta1.ClusterScoreList
 		json.Unmarshal(respBody, &clusterscores)
 		for _, clusterscore := range clusterscores.Items {
 			if clusterscore.Spec.OwnCluster {
 				region = clusterscore.Spec.Region
 				score = clusterscore.Status.Score
+				items = clusterscore.Status.Nodes
 				break
 			}
 		}
 		if score > 0 && len(region) > 0 {
 			if cs.Spec.Region == region {
 				cs.Status.Score = score
+				cs.Status.Nodes = items
 				if err := r.Status().Patch(ctx, &cs, client.Merge); err != nil {
 					return ctrl.Result{Requeue: false}, err
 				}
@@ -115,6 +122,7 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				newCs := cs.DeepCopy()
 				newCs.Spec.Region = region
 				newCs.Status.Score = score
+				newCs.Status.Nodes = items
 				patch := client.MergeFrom(&cs)
 				if err := r.Patch(ctx, newCs, patch); err != nil {
 					return ctrl.Result{Requeue: false}, err
@@ -184,7 +192,7 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				MY_POD_NAMESPACE := os.Getenv("MY_POD_NAMESPACE")
 				name := strings.ReplaceAll(region, ".", "-")
 				config := mgr.GetConfig()
-				var cs waoendpointproxyv1beta1.ClusterScore
+				var cs multiclusterendpointproxyv1beta1.ClusterScore
 				err := r.Get(ctx, client.ObjectKey{Namespace: MY_POD_NAMESPACE, Name: name}, &cs)
 				if err == nil {
 					if cs.Spec.Endpoint != config.Host || cs.Spec.Region != region || !cs.Spec.OwnCluster {
@@ -196,12 +204,12 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 						r.Patch(ctx, newCs, patch)
 					}
 				} else {
-					cs := waoendpointproxyv1beta1.ClusterScore{
+					cs := multiclusterendpointproxyv1beta1.ClusterScore{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      name,
 							Namespace: MY_POD_NAMESPACE,
 						},
-						Spec: waoendpointproxyv1beta1.ClusterScoreSpec{
+						Spec: multiclusterendpointproxyv1beta1.ClusterScoreSpec{
 							Endpoint:   config.Host,
 							Region:     region,
 							OwnCluster: true,
@@ -212,7 +220,7 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 		}
 
-		clusterScores := waoendpointproxyv1beta1.ClusterScoreList{}
+		clusterScores := multiclusterendpointproxyv1beta1.ClusterScoreList{}
 		mgr.GetCache().List(ctx, &clusterScores)
 
 		var requests []reconcile.Request
@@ -229,7 +237,7 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&waoendpointproxyv1beta1.ClusterScore{}).
+		For(&multiclusterendpointproxyv1beta1.ClusterScore{}).
 		WatchesRawSource(&source, handler).
 		Complete(r)
 }

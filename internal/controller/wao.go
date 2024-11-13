@@ -39,6 +39,11 @@ type Wao struct {
 	client.Client
 }
 
+type WaoNodeScore struct {
+	Name  string
+	Score int64
+}
+
 func NewWao(mgr ctrl.Manager) *Wao {
 	cfg := mgr.GetConfig()
 
@@ -180,7 +185,7 @@ func (wao *Wao) Score(ctx context.Context, ctrlclient client.Client, nodeName st
 	return podPowerConsumption
 }
 
-func (wao *Wao) ClusterScore(ctx context.Context, ctrlclient client.Client, appendUsage float64, delta bool) int64 {
+func (wao *Wao) ClusterScore(ctx context.Context, ctrlclient client.Client, appendUsage float64, delta bool) (total int64, items []WaoNodeScore) {
 	var nodeList corev1.NodeList
 	//requirement, _ := labels.NewRequirement(corev1.LabelTopologyRegion, selection.Exists, []string{})
 	err := ctrlclient.List(ctx, &nodeList, &client.ListOptions{
@@ -188,20 +193,21 @@ func (wao *Wao) ClusterScore(ctx context.Context, ctrlclient client.Client, appe
 		// LabelSelector: labels.NewSelector().Add(*requirement),
 	})
 	if err != nil {
-		return -1
+		total = -1
+		return
 	}
-	var total int64
 	var count int64
 	for _, node := range nodeList.Items {
 		score := wao.Score(ctx, ctrlclient, node.Name, appendUsage, delta)
 		if score >= 0 {
 			total += score
+			items = append(items, WaoNodeScore{Name: node.Name, Score: score})
 			count++
 		}
 	}
 	if count == 0 {
-		return -1
+		total = -1
+		return
 	}
-	//return int64(total / count)
-	return int64(total)
+	return
 }

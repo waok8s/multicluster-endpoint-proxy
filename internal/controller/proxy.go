@@ -32,8 +32,8 @@ type Proxy struct {
 //+kubebuilder:rbac:groups=*,resources=*,verbs=*
 
 const (
-	CERTCRTFILE = "/etc/waoendpointproxy/pki/tls.crt"
-	CERTKEYFILE = "/etc/waoendpointproxy/pki/tls.key"
+	CERTCRTFILE = "/etc/multiclusterendpointproxy/pki/tls.crt"
+	CERTKEYFILE = "/etc/multiclusterendpointproxy/pki/tls.key"
 	ROOTCAFILE  = "/etc/kubernetes/pki/ca.crt"
 )
 
@@ -80,17 +80,17 @@ func (h *ProxyHandler1) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	reqBody, _ := io.ReadAll(req.Body)
 
-	responseKind, waoEndpointReq := h.dr.CreateDistributedRequest(req, reqBody)
+	responseKind, multiEndpointReq := h.dr.CreateDistributedRequest(req, reqBody)
 
 	//var mutex sync.Mutex
 	var wg sync.WaitGroup
 	var rwg sync.WaitGroup
 	var respBodys [][]byte
 	if responseKind != RESP_KIND_NO_MERGE {
-		rwg.Add(len(waoEndpointReq) - 1)
+		rwg.Add(len(multiEndpointReq) - 1)
 	}
 
-	for i, v := range waoEndpointReq {
+	for i, v := range multiEndpointReq {
 		var transport http.RoundTripper
 		u, _ := url.Parse(v.Host)
 		reverseProxyLocation, _ := url.Parse(u.String())

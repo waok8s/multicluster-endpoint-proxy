@@ -18,7 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/tidwall/gjson"
-	waoendpointproxyv1beta1 "github.com/waok8s/wao-endpoint-proxy/api/v1beta1"
+	multiclusterendpointproxyv1beta1 "github.com/waok8s/multicluster-endpoint-proxy/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,7 +32,7 @@ type DistributedRequest struct {
 	wao *Wao
 }
 
-//#+kubebuilder:rbac:groups=waoendpointproxy.bitmedia.co.jp,resources=*,verbs=get;list
+//#+kubebuilder:rbac:groups=multicluster-endpoint-proxy.waok8s.github.io,resources=*,verbs=get;list
 
 const (
 	REQ_TYPE_ONLY_MY_DOMAIN = iota
@@ -58,6 +58,8 @@ const (
 	API_TYPE_APPS_V1_DEPLOYMENT
 	API_TYPE_APPS_V1_STATEFULSET
 	API_TYPE_APIS_CLUSTERSCORE
+	API_TYPE_APIS_ISTIO_DESTINATIONRULE
+	API_TYPE_APIS_ISTIO_VIRTUALSERVICE
 )
 
 type CommonResource[T1 any, T2 any] struct {
@@ -124,8 +126,14 @@ var getApiTypeMaster = []GetApiTypeMasterProp{
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets/[^/]*/scale$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets/[^/]*$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
-	{expr: `^/apis/waoendpointproxy.bitmedia.co.jp/v1beta1/clusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
-	{expr: `^/apis/waoendpointproxy.bitmedia.co.jp/v1beta1/namespaces/[^/]*c/lusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
+	{expr: `^/apis/multicluster-endpoint-proxy.waok8s.github.io/v1beta1/clusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
+	{expr: `^/apis/multicluster-endpoint-proxy.waok8s.github.io/v1beta1/namespaces/[^/]*/clusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
+	{expr: `^/apis/networking.istio.io/[^/]*/destinationrules$`, apiType: API_TYPE_APIS_ISTIO_DESTINATIONRULE},
+	{expr: `^/apis/networking.istio.io/[^/]*/namespaces/[^/]*/destinationrules$`, apiType: API_TYPE_APIS_ISTIO_DESTINATIONRULE},
+	{expr: `^/apis/networking.istio.io/[^/]*/namespaces/[^/]*/destinationrules/[^/]*$`, apiType: API_TYPE_APIS_ISTIO_DESTINATIONRULE},
+	{expr: `^/apis/networking.istio.io/[^/]*/virtualservices$`, apiType: API_TYPE_APIS_ISTIO_VIRTUALSERVICE},
+	{expr: `^/apis/networking.istio.io/[^/]*/namespaces/[^/]*/virtualservices$`, apiType: API_TYPE_APIS_ISTIO_VIRTUALSERVICE},
+	{expr: `^/apis/networking.istio.io/[^/]*/namespaces/[^/]*/virtualservices/[^/]*$`, apiType: API_TYPE_APIS_ISTIO_VIRTUALSERVICE},
 }
 
 func GetApiType(path string) (apiType int) {
@@ -140,7 +148,7 @@ func GetApiType(path string) (apiType int) {
 	return
 }
 
-func SplitReplicas(items []waoendpointproxyv1beta1.ClusterScore, replicas int64) (result []int64) {
+func SplitReplicas(items []multiclusterendpointproxyv1beta1.ClusterScore, replicas int64) (result []int64) {
 	if replicas < 0 {
 		result = nil
 		return
@@ -189,13 +197,13 @@ func SplitReplicas(items []waoendpointproxyv1beta1.ClusterScore, replicas int64)
 }
 
 func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBody []byte) (responseKind int, requests []WaoEndpointRequest) {
-	var items []waoendpointproxyv1beta1.ClusterScore
-	clusterScores := waoendpointproxyv1beta1.ClusterScoreList{}
+	var items []multiclusterendpointproxyv1beta1.ClusterScore
+	clusterScores := multiclusterendpointproxyv1beta1.ClusterScoreList{}
 	dr.Cache.List(context.Background(), &clusterScores)
 	for i, clusterScore := range clusterScores.Items {
 		//lint:ignore S1002 set true in SetupWithManager
 		if clusterScore.Spec.OwnCluster == true && i > 0 {
-			items = append([]waoendpointproxyv1beta1.ClusterScore{clusterScore}, items...)
+			items = append([]multiclusterendpointproxyv1beta1.ClusterScore{clusterScore}, items...)
 		} else {
 			items = append(items, clusterScore)
 		}
@@ -229,7 +237,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 		case http.MethodPost, http.MethodPut:
 			apiType = GetApiType(req.URL.Path)
 			switch apiType {
-			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_SERVICE, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM:
+			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_SERVICE, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM, API_TYPE_APIS_ISTIO_DESTINATIONRULE, API_TYPE_APIS_ISTIO_VIRTUALSERVICE:
 				for i, c := range items {
 					val := c.Spec.Region
 					if i == 0 {
@@ -241,6 +249,9 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 						resource.ObjectMeta.Labels = map[string]string{LABEL_KEY: val}
 					} else {
 						resource.ObjectMeta.Labels[LABEL_KEY] = val
+					}
+					if apiType == API_TYPE_CORE_V1_NAMESPACE {
+						resource.ObjectMeta.Labels["istio-injection"] = "enabled"
 					}
 					s, _ := json.Marshal(resource)
 					u, _ := url.Parse(c.Spec.Endpoint)
@@ -340,7 +351,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 		case http.MethodPatch:
 			apiType = GetApiType(req.URL.Path)
 			switch apiType {
-			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_SERVICE, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM:
+			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_SERVICE, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM, API_TYPE_APIS_ISTIO_DESTINATIONRULE, API_TYPE_APIS_ISTIO_VIRTUALSERVICE:
 				reqType = REQ_TYPE_COPY_ALL_DOMAIN
 			case API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_STATEFULSET:
 				reqBodyStr := *(*string)(unsafe.Pointer(&reqBody))

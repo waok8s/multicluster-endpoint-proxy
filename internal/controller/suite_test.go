@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	waoendpointproxyv1beta1 "github.com/waok8s/wao-endpoint-proxy/api/v1beta1"
+	multiclusterendpointproxyv1beta1 "github.com/waok8s/multicluster-endpoint-proxy/api/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -72,7 +72,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = waoendpointproxyv1beta1.AddToScheme(scheme.Scheme)
+	err = multiclusterendpointproxyv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

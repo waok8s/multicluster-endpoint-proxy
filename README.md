@@ -1,9 +1,9 @@
-# wao-endpoint-proxy
+# multicluster-endpoint-proxy
 複数クラスターのWAOより取得したスコアをもとにワークロードの適切配置を行うAPIサーバーのプロキシ
 
 ## Description
-各クラスタに配置されたWAO-Endpoint-Proxyはメトリクス及びカスタムメトリクスをもとにクラスタのスコア（予測消費電力）を算出する。
-APIサーバーのリバースプロキシとして動作し、ユーザーからのワークロード配置要求（Deploymento）に対してすk、スコアをもとに分散配置を行う。
+各クラスタに配置されたMulticluster-Endpoint-Proxyはメトリクス及びカスタムメトリクスをもとにクラスタのスコア（予測消費電力）を算出する。
+APIサーバーのリバースプロキシとして動作し、ユーザーからのワークロード配置要求（Deployment/StatefulSetなど）に対してスコアをもとに分散配置を行う。
 
 ## Getting Started
 
@@ -14,6 +14,7 @@ APIサーバーのリバースプロキシとして動作し、ユーザーか�
 - Kubernetes v1.29.0+ cluster.
 - metrics-server v0.6.4+
 - wao-core v1.29
+- wao-scheduler v1.29
 - wao-metrics-adapter v1.29
 
 ### デプロイ方法
@@ -42,14 +43,21 @@ kubectl label nodes ノード名 nodetype=ノード名
 ```
 
 - metrics-server、wao-core、wao-metrics-adapterのデプロイ
+
+- Namespace作成
+
+```sh
+kubectl create namespace multicluster-endpoint-proxy-system
+```
+
 - サーバ証明書のインストール
 
 ```sh
 subjectAltName=`openssl x509 -ext subjectAltName -noout -in /etc/kubernetes/pki/apiserver.crt | tail -n +2 | sed 's/IP Address/IP/g' |sed 's/ //g'`
-touch wao-endpoint-proxy.crt wao-endpoint-proxy.key
-sudo openssl req -x509 -nodes -days 365 -new -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -keyout wao-endpoint-proxy.key -out wao-endpoint-proxy.crt -subj "/CN=wao-endpoint-proxy" -addext "subjectAltName=$subjectAltName"
-kubectl create secret tls wao-endpoint-proxy-system-tls -n wao-system --cert=wao-endpoint-proxy.crt --key=wao-endpoint-proxy.key -o yaml --dry-run=client | kubectl apply -f -
-rm wao-endpoint-proxy.crt wao-endpoint-proxy.key
+touch multicluster-endpoint-proxy.crt multicluster-endpoint-proxy.key
+sudo openssl req -x509 -nodes -days 365 -new -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -keyout multicluster-endpoint-proxy.key -out multicluster-endpoint-proxy.crt -subj "/CN=multicluster-endpoint-proxy" -addext "subjectAltName=$subjectAltName"
+kubectl create secret tls multicluster-endpoint-proxy-system-tls -n multicluster-endpoint-proxy-system --cert=multicluster-endpoint-proxy.crt --key=multicluster-endpoint-proxy.key -o yaml --dry-run=client | kubectl apply -f -
+rm multicluster-endpoint-proxy.crt multicluster-endpoint-proxy.key
 ```
 
 **インストール実行:**
@@ -61,27 +69,27 @@ kubectl apply -f dist/install.yaml
 ### クラスタースコアの確認
 
 ```sh
-kubectl get clusterscore -n wao-system
+kubectl get clusterscore -n multicluster-endpoint-proxy-system
 ```
 
 ### 他クラスターの追加
 
 ```yaml
-apiVersion: waoendpointproxy.bitmedia.co.jp/v1beta1
+apiVersion: multicluster-endpoint-proxy.waok8s.github.io/v1beta1
 kind: ClusterScore
 metadata:
   name: other-cluster1
-  namespace: wao-system
+  namespace: multicluster-endpoint-proxy-system
 spec:
   endpoint: "https://192.168.10.82:18081"
 ```
 
-**NOTE:** 他クラスターでもwao-endpoint-proxyが動作している必要があります。（自クラスターのリソースはwao-endpoint-proxyが自動で生成するのでユーザーが設定する必要はありません）
+**NOTE:** 他クラスターでもmulticluster-endpoint-proxyが動作している必要があります。（自クラスターのリソースはmulticluster-endpoint-proxyが自動で生成するのでユーザーが設定する必要はありません）
 
 ### 外部からのアクセス用のサービスを作成
 環境に応じてNodePortやLoadBalancerを作成し外部からのアクセスを可能にします。
 
-- selectorには「app: wao-endpoint-proxy」を指定
+- selectorには「app: multicluster-endpoint-proxy」を指定
 - targetPortはinstall.yamlのDeployment: spec.template.spec.containers.envのPORT1、PORT2で確認
 
 ### kubeconfigの編集
@@ -99,7 +107,7 @@ clusters:
 - cluster: # 上記のような通常使用しているclusterをコピーし、接続先とnameを変更する。
     certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FU....
     server: https://10.10.11.101:32080
-  name: wao-endpoint-proxy
+  name: multicluster-endpoint-proxy
 
 contexts:
 - context:
@@ -107,15 +115,15 @@ contexts:
     user: kubernetes-admin
   name: kubernetes-admin@cluster1
 - context: # 上記のような通常使用しているcontextをコピーし、clusterとnameを変更する。
-    cluster: wao-endpoint-proxy
+    cluster: multicluster-endpoint-proxy
     user: kubernetes-admin
-  name: wao-endpoint-proxy
+  name: multicluster-endpoint-proxy
 ```
 
-アクセスする場合には contextにwao-endpoint-proxyを指定します。
+アクセスする場合には contextにmulticluster-endpoint-proxyを指定します。
 
 ```sh
-kubectl --context=wao-endpoint-proxy get pod
+kubectl --context=multicluster-endpoint-proxy get pod
 ```
 
 ## Custom Resources
@@ -123,7 +131,7 @@ kubectl --context=wao-endpoint-proxy get pod
 ### クラスタースコア
 **API:**
 ```
-GET /apis/waoendpointproxy.bitmedia.co.jp/v1beta1/namespaces/{namespace}/clusterscores
+GET /apis/multicluster-endpoint-proxy.waok8s.github.io/v1beta1/namespaces/{namespace}/clusterscores
 ```
 
 **ボディ:**
@@ -132,7 +140,7 @@ GET /apis/waoendpointproxy.bitmedia.co.jp/v1beta1/namespaces/{namespace}/cluster
 
 |フィールド名|フィールド型|説明／値|
 |---|---|---|
-|apiVersion|string|waoendpointproxy.bitmedia.co.jp/v1beta1|
+|apiVersion|string|multicluster-endpoint-proxy.waok8s.github.io/v1beta1|
 |kind|string|ClusterScoreList|
 |metadata|ObjectMeta|標準のMetaオブジェクト|
 |items|ClusterScore array|ClusterScoreの配列|
@@ -141,7 +149,7 @@ GET /apis/waoendpointproxy.bitmedia.co.jp/v1beta1/namespaces/{namespace}/cluster
 
 |フィールド名|フィールド型|説明／値|
 |---|---|---|
-|apiVersion|string|waoendpointproxy.bitmedia.co.jp/v1beta1|
+|apiVersion|string|multicluster-endpoint-proxy.waok8s.github.io/v1beta1|
 |kind|string|ClusterScore|
 |metadata|ObjectMeta|標準のMetaオブジェクト|
 |spec|ClusterScoreSpec|ClusterScoreSpecオブジェクト|
@@ -167,10 +175,10 @@ GET /apis/waoendpointproxy.bitmedia.co.jp/v1beta1/namespaces/{namespace}/cluster
 |環境変数名|説明／値|
 |---|---|
 |FETCH_INTERVAL|クラスタースコアの更新間隔。（秒）|
-|LABEL_KEY|wao-endpoint-proxyがワークロード生成時に付与するラベルのキー名|
-|LABEL_VALUE_MY_DOMAIN|wao-endpoint-proxyがワークロード生成時に付与するラベルの値。自ドメイン向けに生成するワークロードにのみ使用。他ドメインの値はリージョン名を付与|
+|LABEL_KEY|multicluster-endpoint-proxy-endpoint-proxyがワークロード生成時に付与するラベルのキー名|
+|LABEL_VALUE_MY_DOMAIN|multicluster-endpoint-proxy-endpoint-proxyがワークロード生成時に付与するラベルの値。自ドメイン向けに生成するワークロードにのみ使用。他ドメインの値はリージョン名を付与|
 |PORT1|ユーザーからのリクエストを待ち受けるポート番号|
-|PORT2|他クラスターのwao-endpoint-proxyからのリクエストを待ち受けるポート番号|
+|PORT2|他クラスターのmulticluster-endpoint-proxy-endpoint-proxyからのリクエストを待ち受けるポート番号|
 
 ## Proxy Detail
 

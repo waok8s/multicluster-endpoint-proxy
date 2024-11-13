@@ -1,4 +1,4 @@
-module github.com/waok8s/wao-endpoint-proxy
+module github.com/waok8s/multicluster-endpoint-proxy
 
 go 1.21.8
 

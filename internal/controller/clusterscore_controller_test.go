@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	waoendpointproxyv1beta1 "github.com/waok8s/wao-endpoint-proxy/api/v1beta1"
+	multiclusterendpointproxyv1beta1 "github.com/waok8s/multicluster-endpoint-proxy/api/v1beta1"
 )
 
 var _ = Describe("ClusterScore Controller", func() {
@@ -40,13 +40,13 @@ var _ = Describe("ClusterScore Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		clusterscore := &waoendpointproxyv1beta1.ClusterScore{}
+		clusterscore := &multiclusterendpointproxyv1beta1.ClusterScore{}
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind ClusterScore")
 			err := k8sClient.Get(ctx, typeNamespacedName, clusterscore)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &waoendpointproxyv1beta1.ClusterScore{
+				resource := &multiclusterendpointproxyv1beta1.ClusterScore{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,7 +59,7 @@ var _ = Describe("ClusterScore Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &waoendpointproxyv1beta1.ClusterScore{}
+			resource := &multiclusterendpointproxyv1beta1.ClusterScore{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
