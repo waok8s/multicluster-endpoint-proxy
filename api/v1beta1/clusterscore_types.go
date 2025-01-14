@@ -28,7 +28,7 @@ type ClusterScoreSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Endpoint string `json:"endpoint"`
 
 	Region string `json:"region,omitempty"`
@@ -48,8 +48,8 @@ type ClusterScoreStatus struct {
 	Nodes []ClusterScoreNodeScore `json:"nodes"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // +kubebuilder:printcolumn:name="Region",type=string,JSONPath=`.spec.region`
 // +kubebuilder:printcolumn:name="Score",type=integer,JSONPath=`.status.score`
@@ -63,7 +63,7 @@ type ClusterScore struct {
 	Status ClusterScoreStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ClusterScoreList contains a list of ClusterScore
 type ClusterScoreList struct {
