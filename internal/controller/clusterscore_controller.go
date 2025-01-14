@@ -60,7 +60,7 @@ type ClusterScoreReconciler struct {
 // the user.
 //
 // For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.3/pkg/reconcile
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.4/pkg/reconcile
 func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
@@ -167,18 +167,6 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		fetchInterval = 30
 	}
 
-	events := make(chan event.GenericEvent)
-	source := source.Channel{
-		Source:         events,
-		DestBufferSize: 0,
-	}
-	err := mgr.Add(&ticker{
-		events:   events,
-		interval: time.Duration(fetchInterval) * time.Second, // c.ProbeInterval,
-	})
-	if err != nil {
-		return err
-	}
 	handler := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, clientObject client.Object) []reconcile.Request {
 		var nodeList corev1.NodeList
 		requirement, _ := labels.NewRequirement(corev1.LabelTopologyRegion, selection.Exists, []string{})
@@ -235,9 +223,21 @@ func (r *ClusterScoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 		return requests
 	})
+	events := make(chan event.GenericEvent)
+	source := source.Channel(
+		events,
+		handler,
+	)
+	err := mgr.Add(&ticker{
+		events:   events,
+		interval: time.Duration(fetchInterval) * time.Second, // c.ProbeInterval,
+	})
+	if err != nil {
+		return err
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterendpointproxyv1beta1.ClusterScore{}).
-		WatchesRawSource(&source, handler).
+		WatchesRawSource(source).
 		Complete(r)
 }

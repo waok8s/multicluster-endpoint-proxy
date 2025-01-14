@@ -198,6 +198,10 @@ func (wao *Wao) ClusterScore(ctx context.Context, ctrlclient client.Client, appe
 	}
 	var count int64
 	for _, node := range nodeList.Items {
+		if node.Spec.Unschedulable {
+			klog.InfoS("wao.ClusterScore unschedulable", "node", node.Name)
+			continue
+		}
 		score := wao.Score(ctx, ctrlclient, node.Name, appendUsage, delta)
 		if score >= 0 {
 			total += score

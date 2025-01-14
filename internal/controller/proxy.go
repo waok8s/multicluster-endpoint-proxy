@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -29,7 +30,7 @@ type Proxy struct {
 	serverForRemote *http.Server
 }
 
-//+kubebuilder:rbac:groups=*,resources=*,verbs=*
+// +kubebuilder:rbac:groups=*,resources=*,verbs=*
 
 const (
 	CERTCRTFILE = "/etc/multiclusterendpointproxy/pki/tls.crt"
@@ -79,6 +80,9 @@ func (h *ProxyHandler1) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	proxyLog.Info("PORT1: " + req.Method + " " + req.URL.Path)
 
 	reqBody, _ := io.ReadAll(req.Body)
+	if len(reqBody) > 0 {
+		proxyLog.Info("PORT1: " + *(*string)(unsafe.Pointer(&reqBody)))
+	}
 
 	responseKind, multiEndpointReq := h.dr.CreateDistributedRequest(req, reqBody)
 
@@ -185,6 +189,12 @@ func (h *ProxyHandler1) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		proxy.Transport = transport
 		wg.Add(1)
 		f := func(req *http.Request) {
+			proxyLog.Info("PORT1: Fwd " + req.Host + ": " + req.Method + " " + req.URL.Path)
+			if req.ContentLength > 0 {
+				b, _ := io.ReadAll(req.Body)
+				proxyLog.Info("PORT1: Fwd " + req.Host + ": " + *(*string)(unsafe.Pointer(&b)))
+				req.Body = io.NopCloser(bytes.NewReader(b))
+			}
 			proxy.ServeHTTP(rw, req)
 			wg.Done()
 		}
@@ -199,6 +209,11 @@ type ProxyHandler2 struct {
 
 func (h *ProxyHandler2) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	proxyLog.Info("PORT2: " + req.Method + " " + req.URL.Path)
+	if req.ContentLength > 0 {
+		b, _ := io.ReadAll(req.Body)
+		proxyLog.Info("PORT2: " + *(*string)(unsafe.Pointer(&b)))
+		req.Body = io.NopCloser(bytes.NewReader(b))
+	}
 	if username, password, ok := req.BasicAuth(); !ok || username != os.Getenv("BASIC_AUTH_USERNAME") || password != os.Getenv("BASIC_AUTH_PASSWORD") {
 		w.Header().Add("WWW-Authenticate", `Basic realm="private area"`)
 		w.WriteHeader(http.StatusUnauthorized)
