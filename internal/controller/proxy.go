@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -167,6 +168,21 @@ func (h *ProxyHandler1) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			rw = w
 		} else {
 			transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+				if err != nil {
+					proxyLog.Info("PORT1: Err [" + err.Error() + "] " + r.Host + ": " + r.Method + " " + r.URL.Path)
+					if r.Method != http.MethodGet {
+						if strings.Contains(err.Error(), "no route to host") {
+							proxy.ErrorHandler = nil
+							proxy.ServeHTTP(w, r)
+							return
+						}
+					}
+				} else {
+					proxyLog.Info("PORT1: Err " + r.Host + ": " + r.Method + " " + r.URL.Path)
+				}
+				w.WriteHeader(http.StatusBadGateway)
+			}
 			if responseKind != RESP_KIND_NO_MERGE {
 				proxy.ModifyResponse = func(r *http.Response) error {
 					if r.StatusCode == http.StatusOK {

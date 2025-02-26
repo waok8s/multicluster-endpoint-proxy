@@ -44,8 +44,9 @@ type ClusterScoreNodeScore struct {
 
 // ClusterScoreStatus defines the observed state of ClusterScore
 type ClusterScoreStatus struct {
-	Score int64                   `json:"score,omitempty"`
-	Nodes []ClusterScoreNodeScore `json:"nodes"`
+	Score           int64                   `json:"score,omitempty"`
+	Nodes           []ClusterScoreNodeScore `json:"nodes"`
+	UpdateTimestamp metav1.Time             `json:"updateTimestamp,omitempty" protobuf:"bytes,8,opt,name=updateTimestamp"`
 }
 
 // +kubebuilder:object:root=true

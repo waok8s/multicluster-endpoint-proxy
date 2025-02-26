@@ -78,6 +78,9 @@ spec:
               score:
                 format: int64
                 type: integer
+              updateTimestamp:
+                format: date-time
+                type: string
             required:
             - nodes
             type: object

@@ -8,14 +8,14 @@ APIサーバーのリバースプロキシとして動作し、ユーザーか�
 ## Getting Started
 
 ### 必要要件
-- go version v1.21.0+
+- go version v1.22.2+
 - docker version 17.03+.
-- kubectl version v1.29.0+.
-- Kubernetes v1.29.0+ cluster.
+- kubectl version v1.30.0+.
+- Kubernetes v1.30.0+ cluster.
 - metrics-server v0.6.4+
-- wao-core v1.29
-- wao-scheduler v1.29
-- wao-metrics-adapter v1.29
+- wao-core v1.30
+- wao-scheduler v1.30
+- wao-metrics-adapter v1.30
 
 ### デプロイ方法
 

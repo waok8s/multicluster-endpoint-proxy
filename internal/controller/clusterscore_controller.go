@@ -69,6 +69,11 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	diff := time.Now().Sub(cs.Status.UpdateTimestamp.Time)
+	if diff.Seconds() < 25.0 {
+		return ctrl.Result{}, nil
+	}
+
 	//lint:ignore S1002 set true in SetupWithManager
 	if cs.Spec.OwnCluster == true {
 		score, items := r.wao.ClusterScore(ctx, r.Client, 0, false)
@@ -78,6 +83,7 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			for _, n := range items {
 				cs.Status.Nodes = append(cs.Status.Nodes, multiclusterendpointproxyv1beta1.ClusterScoreNodeScore{Name: n.Name, Score: n.Score})
 			}
+			cs.Status.UpdateTimestamp = metav1.Now()
 			if err := r.Status().Patch(ctx, &cs, client.Merge); err != nil {
 				return ctrl.Result{Requeue: false}, err
 			}
@@ -94,7 +100,7 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		httpClient.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 		scoreResp, err := httpClient.Do(scoreReq)
 		if err != nil {
-			return ctrl.Result{Requeue: false}, err
+			return ctrl.Result{Requeue: false}, nil
 		}
 		defer scoreResp.Body.Close()
 		if scoreResp.StatusCode != http.StatusOK {
@@ -115,6 +121,7 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if cs.Spec.Region == region {
 				cs.Status.Score = score
 				cs.Status.Nodes = items
+				cs.Status.UpdateTimestamp = metav1.Now()
 				if err := r.Status().Patch(ctx, &cs, client.Merge); err != nil {
 					return ctrl.Result{Requeue: false}, err
 				}
@@ -123,6 +130,7 @@ func (r *ClusterScoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				newCs.Spec.Region = region
 				newCs.Status.Score = score
 				newCs.Status.Nodes = items
+				newCs.Status.UpdateTimestamp = metav1.Now()
 				patch := client.MergeFrom(&cs)
 				if err := r.Patch(ctx, newCs, patch); err != nil {
 					return ctrl.Result{Requeue: false}, err

@@ -198,6 +198,23 @@ func (wao *Wao) ClusterScore(ctx context.Context, ctrlclient client.Client, appe
 	}
 	var count int64
 	for _, node := range nodeList.Items {
+		if len(node.Status.Conditions) == 0 {
+			klog.InfoS("wao.ClusterScore empty conditions", "node", node.Name)
+			continue
+		}
+		var ready bool = false
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady {
+				if condition.Status == corev1.ConditionTrue {
+					ready = true
+				}
+				break
+			}
+		}
+		if !ready {
+			klog.InfoS("wao.ClusterScore Unable to confirm that the NodeReadyCondition is True", "node", node.Name)
+			continue
+		}
 		if node.Spec.Unschedulable {
 			klog.InfoS("wao.ClusterScore unschedulable", "node", node.Name)
 			continue

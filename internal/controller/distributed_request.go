@@ -56,7 +56,9 @@ const (
 	API_TYPE_CORE_V1_PERSISTENTVOLUME
 	API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM
 	API_TYPE_APPS_V1_DEPLOYMENT
+	API_TYPE_APPS_V1_DEPLOYMENT_
 	API_TYPE_APPS_V1_STATEFULSET
+	API_TYPE_APPS_V1_STATEFULSET_
 	API_TYPE_APIS_CLUSTERSCORE
 	API_TYPE_APIS_ISTIO_DESTINATIONRULE
 	API_TYPE_APIS_ISTIO_VIRTUALSERVICE
@@ -108,6 +110,8 @@ type GetApiTypeMasterProp struct {
 }
 
 var getApiTypeMaster = []GetApiTypeMasterProp{
+	{expr: `^/openapi/v2$`, apiType: API_TYPE_API},
+	{expr: `^/openapi/v3$`, apiType: API_TYPE_API},
 	{expr: `^/api$`, apiType: API_TYPE_API},
 	{expr: `^/apis$`, apiType: API_TYPE_APIS},
 	{expr: `^/api/v1/namespaces$`, apiType: API_TYPE_CORE_V1_NAMESPACE},
@@ -122,10 +126,10 @@ var getApiTypeMaster = []GetApiTypeMasterProp{
 	{expr: `^/api/v1/namespaces/[^/]*/persistentvolumeclaims/[^/]*$`, apiType: API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/deployments$`, apiType: API_TYPE_APPS_V1_DEPLOYMENT},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/deployments/[^/]*/scale$`, apiType: API_TYPE_APPS_V1_DEPLOYMENT},
-	{expr: `^/apis/apps/v1/namespaces/[^/]*/deployments/[^/]*$`, apiType: API_TYPE_APPS_V1_DEPLOYMENT},
+	{expr: `^/apis/apps/v1/namespaces/[^/]*/deployments/[^/]*$`, apiType: API_TYPE_APPS_V1_DEPLOYMENT_},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
 	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets/[^/]*/scale$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
-	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets/[^/]*$`, apiType: API_TYPE_APPS_V1_STATEFULSET},
+	{expr: `^/apis/apps/v1/namespaces/[^/]*/statefulsets/[^/]*$`, apiType: API_TYPE_APPS_V1_STATEFULSET_},
 	{expr: `^/apis/multicluster-endpoint-proxy.waok8s.github.io/v1beta1/clusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
 	{expr: `^/apis/multicluster-endpoint-proxy.waok8s.github.io/v1beta1/namespaces/[^/]*/clusterscores$`, apiType: API_TYPE_APIS_CLUSTERSCORE},
 	{expr: `^/apis/networking.istio.io/[^/]*/destinationrules$`, apiType: API_TYPE_APIS_ISTIO_DESTINATIONRULE},
@@ -219,7 +223,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 		switch req.Method {
 		case http.MethodGet:
 			switch GetApiType(req.URL.Path) {
-			case API_TYPE_API, API_TYPE_APIS, API_TYPE_APIS_CLUSTERSCORE:
+			case API_TYPE_API, API_TYPE_APIS, API_TYPE_APIS_CLUSTERSCORE, API_TYPE_APPS_V1_DEPLOYMENT_, API_TYPE_APPS_V1_STATEFULSET_:
 			default:
 				accept := req.Header.Get("accept")
 				re, _ := regexp.Compile(`(?i)as=APIGroupDiscoveryList`)
@@ -263,7 +267,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 					requests = append(requests, WaoEndpointRequest{Host: c.Spec.Endpoint, Request: newReq})
 				}
 				reqType = REQ_TYPE_MODIFY
-			case API_TYPE_APPS_V1_DEPLOYMENT:
+			case API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_DEPLOYMENT_:
 				reqType = REQ_TYPE_MODIFY
 				var replicas int64 = 1
 				reqBodyStr := *(*string)(unsafe.Pointer(&reqBody))
@@ -300,7 +304,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 					newReq.Body = io.NopCloser(bytes.NewReader(s))
 					requests = append(requests, WaoEndpointRequest{Host: c.Spec.Endpoint, Request: newReq})
 				}
-			case API_TYPE_APPS_V1_STATEFULSET:
+			case API_TYPE_APPS_V1_STATEFULSET, API_TYPE_APPS_V1_STATEFULSET_:
 				reqType = REQ_TYPE_MODIFY
 				var replicas int64 = 1
 				reqBodyStr := *(*string)(unsafe.Pointer(&reqBody))
@@ -342,7 +346,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 			}
 		case http.MethodDelete:
 			switch GetApiType(req.URL.Path) {
-			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_POD, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM, API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_STATEFULSET:
+			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_POD, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM, API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_DEPLOYMENT_, API_TYPE_APPS_V1_STATEFULSET, API_TYPE_APPS_V1_STATEFULSET_:
 				reqType = REQ_TYPE_COPY_ALL_DOMAIN
 			default:
 				reqType = REQ_TYPE_ONLY_MY_DOMAIN
@@ -353,7 +357,7 @@ func (dr *DistributedRequest) CreateDistributedRequest(req *http.Request, reqBod
 			switch apiType {
 			case API_TYPE_CORE_V1_NAMESPACE, API_TYPE_CORE_V1_SERVICE, API_TYPE_CORE_V1_PERSISTENTVOLUME, API_TYPE_CORE_V1_PERSISTENTVOLUMECLAIM, API_TYPE_APIS_ISTIO_DESTINATIONRULE, API_TYPE_APIS_ISTIO_VIRTUALSERVICE:
 				reqType = REQ_TYPE_COPY_ALL_DOMAIN
-			case API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_STATEFULSET:
+			case API_TYPE_APPS_V1_DEPLOYMENT, API_TYPE_APPS_V1_DEPLOYMENT_, API_TYPE_APPS_V1_STATEFULSET, API_TYPE_APPS_V1_STATEFULSET_:
 				reqBodyStr := *(*string)(unsafe.Pointer(&reqBody))
 				result := gjson.Get(reqBodyStr, "spec.replicas")
 				if result.Index > 0 {
